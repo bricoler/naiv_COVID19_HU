@@ -11,38 +11,51 @@
 #memoria uritese 
 rm(list = ls()) 
 
-# Felepites:
-# Betolti az adatokat online
-# Aggregal orszagokra
-# Minden orszagbol kidobja min_fert erteknel kisebb szakaszt
-# Kiszamol minden orszagra exp es log fuggvenyertekeket
-# Exponencialis EU-sokbol josol HU-ra 
-# Kirajzolja
 
-min_fert <- 17
-min_hossz <- 14 
-
-# ha min_hossznal nagyobb a vektor akkor kiszamol exponencialis es logaritmikus illesztes
-# minden orszagra visszadobja az adatokat
+# parameterek
+min_fert <- 19 #honnantol veszi figyelembe az adatsort
+min_hossz <- 4 #milyen hosszo adatsort tekint elemezhetonek min
+shossz <- 21  # hany napra vetitse elore az eredmenyeket a modell
 
 
 #BETOLTES
 #adatok betoltese Johns Hopkins egyetem folyamatos frissitesu online adataibol
 rawcovid <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv", header=TRUE, as.is=T, sep=",", fileEncoding = "UTF-8") 
 
+#OECD orszagok alapadatai
+oecdraw <- read.csv("https://raw.githubusercontent.com/bricoler/naiv_COVID19_HU/R_code/OECD_2019.csv", header=TRUE, as.is=T, sep=",", fileEncoding = "UTF-8") 
+
+
 #AGGREGALAS
 #aggregalas orszagokra 
-# itt eldobjuk a GEO-t, de a jovoben lehetne kezdeni valamit a tavolsagi adatokkal, ketdimenzioban (ido, ter)
+#E: itt eldobjuk a GEO-t, de a jovoben lehetne kezdeni valamit a tavolsagi adatokkal, ketdimenzioban (ido, ter)
 l2 <- dim(rawcovid)[2] # napok hossza
 
-covid <- aggregate(rawcovid[5:l2], by = list(rawcovid$Country.Region), FUN = sum) # orszagok szerinti aggregalas
-rownames(covid) <- covid[,1] #sornevek javitasa
-covid <- covid[,-1] # elso oszlop torles
+rcovid <- aggregate(rawcovid[5:l2], by = list(rawcovid$Country.Region), FUN = sum) # orszagok szerinti aggregalas rcovid
+rownames(rcovid) <- rcovid[,1] #sornevek javitasa rcovidban
+colnames(rcovid)[1] <- "cname"
+
+rownames(oecdraw) <- oecdraw[,1] #sornevek oecdrawban is
 
 
-#dif matrix eloallitasa (delta)
-d_covid <- covid[1:dim(covid)[1],2:dim(covid)[2]] - covid[1:dim(covid)[1],(1:dim(covid)[2]-1)]
+# OECD orszagok vizsgalata csak
 
+rrcovid <- rcovid[(rcovid$cname %in% oecdraw$cname),] ##rrcovid: csak OECD orszagok
+rrcovid <- rrcovid[,-1] # elso oszlop a cname torlese rrcovidban
+
+
+#dif matrix eloallitasa (delta elozo nap)
+d_covid <- rrcovid[1:dim(rrcovid)[1],2:dim(rrcovid)[2]] - rrcovid[1:dim(rrcovid)[1],(1:(dim(rrcovid)[2]-1))]
+
+#az OECD lakossagszam leosztas
+#covid : lakossagszamaranyos fertozottek aranya OECD orszagokban
+
+covid <- rrcovid
+
+for (i in 1:dim(rrcovid)[1]) 
+{
+covid[i,] <- rrcovid[i,] / oecdraw[rownames(rrcovid)[i],"pop"]
+} 
 
 #SZAMITAS
 # kulonbozo orszagok metaadatok szamitas, exp es log fuggvenyillesztes
@@ -74,20 +87,21 @@ c_tend <- NULL
 for (i in 1:dim(covid)[1]) 
 {
 cname[i] <- rownames(covid)[i] # orszag neve
-chossz[i] <- sum(as.numeric(covid[i,])>0, na.rm=T) # hany nap van tobb mint 0 fertozott
-cmin[i] <- min(as.numeric(covid[i,]), na.rm=T) # minimum fertozottszam
-cmax[i] <- max(as.numeric(covid[i,]), na.rm=T) # maximum fertozottszam
-cmean[i] <- mean(as.numeric(covid[i,]), na.rm=T) # atlagos fertozottszam
-cmedian[i] <- median(as.numeric(covid[i,]), na.rm=T) #median fertozottszam
-csd[i] <- sd(as.numeric(covid[i,]), na.rm=T) #sd fertozottszam
+cmin[i] <- min(as.numeric(covid[i,]), na.rm=T) * oecdraw[rownames(rrcovid)[i],"pop"] # minimum fertozottszam emberben
+cmax[i] <- max(as.numeric(covid[i,]), na.rm=T) * oecdraw[rownames(rrcovid)[i],"pop"] # maximum fertozottszam
+cmean[i] <- mean(as.numeric(covid[i,]), na.rm=T) * oecdraw[rownames(rrcovid)[i],"pop"] # atlagos fertozottszam
+cmedian[i] <- median(as.numeric(covid[i,]), na.rm=T) * oecdraw[rownames(rrcovid)[i],"pop"] #median fertozottszam
+csd[i] <- sd(as.numeric(covid[i,]), na.rm=T) * oecdraw[rownames(rrcovid)[i],"pop"] #sd fertozottszam emberben
 
 tempv <- NULL 
 tempv2 <- NULL
 
 tempv <- na.omit(as.numeric(covid[i,])) # atmeneti vektor a nullak kidobalasa
-tempv2 <- tempv[which(tempv>min_fert)] # 17-nel kisebbek kidobalasa
 
-#ha 10-nel kevesebb a megfigyeles akkor nem szamolunk
+tempv2 <- tempv[which( tempv * oecdraw[rownames(rrcovid)[i],"pop"] > min_fert) ] # 17-nel kisebbek kidobalasa - (tempv * vissza kell szorozni lakossagszamra)
+chossz[i] <- length(tempv2) # hany nap van tobb mint min_fert fertozott
+
+#ha minhossznak kevesebb a megfigyeles akkor nem szamolunk
 #utana exp illesztes
 #utana log illesztes
 
@@ -113,7 +127,7 @@ c_expR2[i] <- 0
 c_logC[i] <- 0
 c_logbeta[i] <- 0
 c_logR2[i] <- 0 
-c_tend[i]<- 0
+c_tend[i]<- "ned2c" # not enough data to calculate
 }
 
 }
@@ -124,55 +138,57 @@ cmeta <- data.frame(cname,chossz,cmin,cmax,cmean,cmedian,csd, c_expC, c_expbeta,
 
 View(cmeta)
 
-# exp es a log orszagok szetvalogatasa ket kulon data.frame-be.
+#Ahol meg keves adat volt fuggvenyszamitashoz, annak kidobasa
 
-cmeta_exp <- cmeta[as.numeric(which(cmeta$c_tend=="exp")),]
-cmeta_log <- cmeta[as.numeric(which(cmeta$c_tend=="log")),]
+cmeta_exp <- cmeta[as.numeric(which(cmeta$c_tend!="ned2c")),]
 
-# Magyarorszag vonzaskorezetebe talalhato orszagok
 
-europa <- c("Italy", "Germany", "France", "Finland", "Sweden", "United Kingdom", "Denmark", "Austria", "Greece", "Iceland", "Ireland", "Norway", "Portugal", "Switzerland")
+#oecd orszagadatok hozzafuzzese a szamitott adatokhoz
 
-cmeta_exp_eu <- cmeta_exp[(cmeta_exp$cname %in% europa),]
+cmeta_exp_oecd <- merge(cmeta_exp, oecdraw) # orszagok metadatai exp es log fuggveny es OECD adatok
 
-#tesztek exponencialis parameterek eloszlasara
 
-shapiro.test(cmeta_exp_eu$c_expC)[2]
-shapiro.test(cmeta_exp_eu$c_expbeta)[2]
-shapiro.test(cmeta_exp_eu$c_expR2)[2]
+#tesztek fuggvenyparameterek eloszlasara
+
+shapiro.test(cmeta_exp_oecd$c_expC)[2]
+shapiro.test(cmeta_exp_oecd$c_expbeta)[2]
+shapiro.test(cmeta_exp_oecd$c_expR2)[2]
+
+shapiro.test(cmeta_exp_oecd$c_logC)[2]
+shapiro.test(cmeta_exp_oecd$c_logbeta)[2]
+shapiro.test(cmeta_exp_oecd$c_logR2)[2]
 
 
 #exp_beta
-HU_beta <- mean(cmeta_exp_eu$c_expbeta)
-error_beta <- qnorm(0.975)*sd(cmeta_exp_eu$c_expbeta)/sqrt(15)
+HU_beta <- mean(cmeta_exp_oecd$c_expbeta)
+error_beta <- qnorm(0.95)*sd(cmeta_exp_oecd$c_expbeta)/sqrt(dim(cmeta_exp_oecd)[2]-1) # 90% CI
 
 HU_betamax <- HU_beta + error_beta
 HU_betamin <- HU_beta - error_beta
 
 #exp_C
-HU_C <- mean(cmeta_exp_eu$c_expC)
-error_c <- qnorm(0.975)*sd(cmeta_exp_eu$c_expC)/sqrt(15)
+HU_C <- mean(cmeta_exp_oecd$c_expC)
+error_c <- qnorm(0.95)*sd(cmeta_exp_oecd$c_expC)/sqrt(dim(cmeta_exp_oecd)[2]-1) # 90% CI
 
 HU_Cmax <- HU_C + error_c
 HU_Cmin <- HU_C - error_c
 
 #expR2
-HU_R2 <- mean(cmeta_exp_eu$c_expR2)
-error_R2 <- qnorm(0.975)*sd(cmeta_exp_eu$c_expR2)/sqrt(15)
+HU_R2 <- mean(cmeta_exp_oecd$c_expR2)
+error_R2 <- qnorm(0.975)*sd(cmeta_exp_oecd$c_expR2)/sqrt(dim(cmeta_exp_oecd)[2]-1)
 
 HU_R2max <- HU_R2 + error_R2
 HU_R2min <- HU_R2 - error_R2
 
 
-# hazai adatok szimulalasa shossz napra
-
-shossz <- 14
+# hazai adatok szimulalasa shossz n
+pnap <- c(1:shossz)
 
 HU_p <- NULL
 HU_pmin <- NULL
 HU_pmax <- NULL
 
-# e kitevojeben a josolt beta 
+# e kitevojeben a josolt beta kiszamitasa
 
 for (i in 1:shossz) {
 HU_p[i] <- exp(1)**(HU_C+(HU_beta*i))
@@ -185,12 +201,15 @@ HU_pmin <- (HU_pmin) * HU_R2
 HU_pmax <- (HU_pmax) * (1+ (1-HU_R2))
 
 
-#Kerekites egesz emberre
-HU_pi <- ceiling(HU_p)
-HU_pmini <- ceiling(HU_pmin) 
-HU_pmaxi <- ceiling(HU_pmax) 
 
-pnap <- length(HU_pmini)
+#Kerekites egesz emberre, hazai populacioval felszorzas
+HU_pi <- ceiling((HU_p) * oecdraw["Hungary","pop"])
+HU_pmini <- ceiling((HU_pmin) * oecdraw["Hungary","pop"])
+HU_pmaxi <- ceiling((HU_pmax) * oecdraw["Hungary","pop"])
+
+# eredmenyek dataframe
+
+results <- data.frame(pnap, HU_p, HU_pmin, HU_pmax, HU_pi, HU_pmini, HU_pmaxi)
 
 #vizualizacio 
 par(mfrow=c(1,1))
@@ -198,12 +217,19 @@ par(mfrow=c(1,1))
 
 #kirajzolas2 : szimulalalt adatok
 #hany napot rajzoljon ki : kir
-kir <- 14
-pnap <- c(1:kir)
 
-plot(pnap, HU_pmaxi[1:kir], xlab = "Napok, 17. beteg megjelenése utáni 14 nap", ylab = "Igazolt fertőzött betegek száma, becslés (CI~0.92)", col=8, lty = 2, pch = 16, cex=0, ylim=c(1,max(HU_pmaxi[1:kir])))
-points (HU_pmini[1:kir], col =8, pch = 16, cex=0)
-polygon(c(pnap[1:kir], rev(pnap[1:kir])), c(HU_pmaxi[1:kir] ,rev(HU_pmini[1:kir])), col = rgb(1, 0, 0,0.5) )
-points(pnap, HU_pi[1:kir], col=1, lty = 2, pch = 16, cex=1, type="b")
+
+plot(pnap, HU_pmax[1:shossz], xlab = "Napok, X. beteg megjelenése után", ylab = "Igazolt fertőzött betegek aránya, becslés (CI 0.82 - 0.86)", col=8, lty = 2, pch = 16, cex=0)
+points (HU_pmin[1:shossz], col =8, pch = 16, cex=0)
+polygon(c(pnap[1:shossz], rev(pnap[1:shossz])), c(HU_pmax[1:shossz] ,rev(HU_pmin[1:shossz])), col = rgb(1, 0, 0,0.5) )
+points(pnap, HU_p[1:shossz], col=1, lty = 2, pch = 16, cex=1, type="b")
+
+#eredmenyek kiiratasa
+View(results)
+#technikai reszletek kiirasa
+#write.csv(cmeta_exp_oecd, file = "D:/R/Data/covid19_hu_tec_res1.csv", fileEncoding = "UTF-8")
+#joslas kiirasa
+#write.csv(results, file = "D:/R/Data/covid19_hu_res1.csv",fileEncoding = "UTF-8")
+
 
 #SIR kod egy resze nem az en szellemi termekem, ezert nem oszthatom meg nyilvanosan, de ha vki ir emailt, kuldom
