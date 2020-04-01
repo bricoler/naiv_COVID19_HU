@@ -12,7 +12,7 @@ rawcovid <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/
 rawcovidd <- read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv", header=TRUE, as.is=T, sep=",", fileEncoding = "UTF-8") #rawcovidd az igazolt halalesetek
 
 #OECD orszagok alapadatai -- Ebben az elemzesben nem hasznalom, de kesobb bovitheto, ezert bennehagyom
-# oecdraw <- read.csv("https://raw.githubusercontent.com/bricoler/naiv_COVID19_HU/R_code/OECD_2019.csv", header=TRUE, as.is=T, sep=",", fileEncoding = "UTF-8") 
+oecdraw <- read.csv("https://raw.githubusercontent.com/bricoler/naiv_COVID19_HU/R_code/OECD_2019.csv", header=TRUE, as.is=T, sep=",", fileEncoding = "UTF-8") 
 
 
 #AGGREGALAS
@@ -100,15 +100,18 @@ rresults <- data.frame(cname,rlen,rmean,rmax,rmin,rmedian,rsd,rsu,rsd,rni2, stri
 colnames(rresults)[1] <- "cname"
 View(rresults) 
 
+plot(c(1:length(rresults$rmean)),rresults$rmean[order(rresults$rmean, decreasing = TRUE)], log="xy")
+
+
 # write.csv(rresults, file = "D:/R/Data/covid19_IEF.csv",fileEncoding = "UTF-8")
 
 
 #Kornyezo orszagok tukreben a ggplot vizualizacio
 #Ukrajnat azert hagyom ki, mert extrem magas
 
-raw_kornyezo_oecd <- covid[rownames(covid) %in% c("Hungary", "Romania", "Serbia", "Slovakia", "Croatia", "Slovenia","Austria"),]
+#raw_kornyezo_oecd <- covid[rownames(covid) %in% oecdraw$cname,]
 
-raw_kornyezo_oecd2 <- t(raw_kornyezo_oecd)
+raw_kornyezo_oecd2 <- t(covid)
 
 #install.packages("ggplot2")
 library("ggplot2")
@@ -118,12 +121,17 @@ library(reshape)
 g_raw <- melt(raw_kornyezo_oecd2)
 colnames(g_raw) <- c("Datum" , "Orszag", "COVID_19_halálozasi_arany_atlaga_es_eloszlasa")
 
+g_raw2 <- g_raw[which(g_raw$COVID_19_halálozasi_arany_atlaga_es_eloszlasa>0.0),]
+
+ggplot(g_raw2, aes(x = reorder(Orszag, COVID_19_halálozasi_arany_atlaga_es_eloszlasa, FUN = median), y = COVID_19_halálozasi_arany_atlaga_es_eloszlasa)) + geom_boxplot()
+
 # Box plot
-boxp <- ggplot(g_raw, aes(Orszag, COVID_19_halálozasi_arany_atlaga_es_eloszlasa)) + 
+boxp <- ggplot(g_raw2, aes(x = reorder(Orszag, COVID_19_halálozasi_arany_atlaga_es_eloszlasa,  FUN = median), y = COVID_19_halálozasi_arany_atlaga_es_eloszlasa)) + 
   geom_boxplot(aes(fill = Orszag)) +
+  geom_jitter(position=position_jitter(0.2)) +
   theme_minimal() +
-  theme(legend.position = "none"
+  theme(legend.position = "none", axis.text.x = element_text(angle=90)
   )
-boxp
+boxp + scale_x_discrete(name="")
 
 #VEGE
