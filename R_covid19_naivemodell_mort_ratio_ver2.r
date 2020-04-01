@@ -100,14 +100,11 @@ rresults <- data.frame(cname,rlen,rmean,rmax,rmin,rmedian,rsd,rsu,rsd,rni2, stri
 colnames(rresults)[1] <- "cname"
 View(rresults) 
 
+#VIZ
 plot(c(1:length(rresults$rmean)),rresults$rmean[order(rresults$rmean, decreasing = TRUE)], log="xy")
 
 
 # write.csv(rresults, file = "D:/R/Data/covid19_IEF.csv",fileEncoding = "UTF-8")
-
-
-#Kornyezo orszagok tukreben a ggplot vizualizacio
-#Ukrajnat azert hagyom ki, mert extrem magas
 
 #raw_kornyezo_oecd <- covid[rownames(covid) %in% oecdraw$cname,]
 
@@ -133,5 +130,9 @@ boxp <- ggplot(g_raw2, aes(x = reorder(Orszag, COVID_19_halálozasi_arany_atlaga
   theme(legend.position = "none", axis.text.x = element_text(angle=90)
   )
 boxp + scale_x_discrete(name="")
+
+#VIZ2
+plot(c(1:length(g_raw2$COVID_19_halálozasi_arany_atlaga_es_eloszlasa )),g_raw2$COVID_19_halálozasi_arany_atlaga_es_eloszlasa[order(g_raw2$COVID_19_halálozasi_arany_atlaga_es_eloszlasa , decreasing = TRUE)], log="y")
+median(g_raw2$COVID_19_halálozasi_arany_atlaga_es_eloszlasa)
 
 #VEGE
